@@ -2,6 +2,13 @@
 #include <NewPing.h>
 
 // 핀 설정
+//일단 버튼을 기준으로 작성했음. app으로 할 지는 이번주안에 결정
+#define SWING_ARM_BTN 2     // 버튼 1: 스윙암 올리기 버튼
+#define NORMAL_MODE_BTN 3   // 버튼 2: 일반모드 버튼
+#define QUICK_MODE_BTN 9    // 버튼 3: 쾌속모드 버튼
+#define SWING_DOWN_BTN 10   // 버튼 4: 스윙암 내리기 버튼
+#define POWER_BTN 14        // 버튼 5: 전원 off 버튼
+
 #define SERVO_SWING 4  // 스윙암 조절 서보모터
 #define SERVO_BRUSH_1 5  // 측면 브러시 1 조절 서보모터
 #define SERVO_BRUSH_2 6  // 측면 브러시 2 조절 서보모터
@@ -58,12 +65,8 @@ enum CleaningState {
   MEASURING,      // 신발 사이즈 측정 상태
   BRUSH_ADJUST,   // 브러시 조정 상태
   CLEANING,       // 청소 중 상태
-  FINISHING       // 청소 완료 상태
+  FINISHING      // 청소 완료 상태
 } currentState = IDLE;
-
-// 블루투스 통신을 위한 변수
-const int COMMAND_LENGTH = 5;
-int commands[COMMAND_LENGTH];  // [POWER_OFF, NORMAL_MODE, QUICK_MODE, SWING_UP, SWING_DOWN]
 
 void setup() {
   // 초기화 코드
@@ -77,109 +80,78 @@ void setup() {
   pinMode(DC_SIDE_2_IN2, OUTPUT);
   pinMode(DC_BOTTOM_IN1, OUTPUT);
   pinMode(DC_BOTTOM_IN2, OUTPUT);
+  pinMode(SWING_ARM_BTN, INPUT);
+  pinMode(NORMAL_MODE_BTN, INPUT);
+  pinMode(QUICK_MODE_BTN, INPUT);
+  pinMode(POWER_BTN, INPUT);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 }
 
 void loop() {
-  // 시리얼 통신으로 명령어 수신
-  if (Serial.available()) {
-    String input = Serial.readStringUntil('\n');
-    parseCommand(input);
-    
-    // 명령어 처리
-    if (commands[0] == 1) {  // POWER_OFF
-      isRunning = false;
-      resetPosition();
-      stopCleaning();
-      Serial.println("Power off command received");
-      return;
-    }
+  // 전원 버튼 처리
+  if (digitalRead(POWER_BTN) == HIGH) {
+    isRunning = false;
+    stopAllMotors();
+    Serial.println("Power button pressed. Shutting down.");
+    return;
+  }
 
-    if (isRunning) {
-      switch (currentState) {
-        case IDLE:
-          if (commands[3] == 1) {  // SWING_UP
-            Serial.println("Swing arm up command received");
-            swingArmUp();
-            currentState = ARM_UP;
-          }
-          break;
+  if (isRunning) {
+    switch (currentState) {
+      case IDLE:
+        // 버튼 1: 스윙암 올리기
+        if (digitalRead(SWING_ARM_BTN) == HIGH) {
+          swingArmUp();
+          currentState = ARM_UP;
+          delay(200);
+        }
+        break;
 
-        case ARM_UP:
-          if (commands[1] == 1) {  // NORMAL_MODE
-            Serial.println("Normal mode command received");
-            currentMode = NORMAL;
-            cleaningDuration = NORMAL_CLEANING_TIME;
-            swingArmDown();
-            currentState = MEASURING;
-          }
-          else if (commands[2] == 1) {  // QUICK_MODE
-            Serial.println("Quick mode command received");
-            currentMode = QUICK;
-            cleaningDuration = QUICK_CLEANING_TIME;
-            swingArmDown();
-            currentState = MEASURING;
-          }
-          break;
+      case ARM_UP:
+        // 모드 선택 대기
+        if (digitalRead(NORMAL_MODE_BTN) == HIGH) {
+          currentMode = NORMAL;
+          cleaningDuration = NORMAL_CLEANING_TIME;
+          swingArmDown();
+          currentState = MEASURING;
+          delay(200);
+        }
+        else if (digitalRead(QUICK_MODE_BTN) == HIGH) {
+          currentMode = QUICK;
+          cleaningDuration = QUICK_CLEANING_TIME;
+          swingArmDown();
+          currentState = MEASURING;
+          delay(200);
+        }
+        break;
 
       case MEASURING:
-        Serial.println("Measuring shoe size");
         measureAndAdjust();
         break;
 
       case CLEANING:
         if (millis() - cleaningStartTime >= cleaningDuration) {
-          Serial.println("Cleaning complete, transitioning to finishing state");
           currentState = FINISHING;
           swingArmUp();
         }
         break;
 
       case FINISHING:
-        Serial.println("Finishing state, waiting for reset");
-        if (commands[4] ==1) {
+        if (digitalRead(SWING_DOWN_BTN) == HIGH) {
           swingArmDown();
           currentState = IDLE;
           delay(200);
         }
         break;
-     }
     }
   }
-}
-
-// 블루투스 명령어 파싱 함수
-void parseCommand(String input) {
-  int index = 0;
-  int prevIndex = 0;
-  
-  // 쉼표로 구분된 명령어 파싱
-  for (int i = 0; i < COMMAND_LENGTH; i++) {
-    index = input.indexOf(',', prevIndex);
-    if (index == -1) {
-      commands[i] = input.substring(prevIndex).toInt();
-      break;
-    }
-    commands[i] = input.substring(prevIndex, index).toInt();
-    prevIndex = index + 1;
-  }
-  Serial.print("Commands received: ");
-  for (int i = 0; i < COMMAND_LENGTH; i++) {
-    Serial.print(commands[i]);
-    Serial.print(" ");
-  }
-  Serial.println();
 }
 
 // 신발 사이즈 측정 및 브러시 조정 함수
 void measureAndAdjust() {
   int distance = sonar.ping_cm();
   if (distance > 0 && distance <= 200) {  // 유효한 거리 범위 내에서만 처리
-    Serial.print("Shoe size measured: ");
-    Serial.print(distance);
-    Serial.println(" cm");
-
     adjustBrushes(distance);
     startCleaning();
     cleaningStartTime = millis();
@@ -189,26 +161,27 @@ void measureAndAdjust() {
 
 // 브러시 조정 함수
 void adjustBrushes(int distance) {
+  // 거리에 따른 브러시 각도 매핑
+  // 예: 거리가 가까울수록(신발이 작을수록) 브러시 간격을 좁게
   int brushAngle;
-  if (distance < 50) {
+  if (distance < 50) {  // 작은 신발
     brushAngle = 30;
-  } else if (distance < 100) {
+  } else if (distance < 100) {  // 중간 크기 신발
     brushAngle = 60;
-  } else {
+  } else {  // 큰 신발
     brushAngle = 90;
   }
   
   sideBrush1.write(brushAngle);
-  sideBrush2.write(180 - brushAngle);
-  Serial.print("Brushes adjusted to angle: ");
-  Serial.println(brushAngle);
-  delay(1000);
+  sideBrush2.write(180 - brushAngle);  // 반대쪽 브러시는 반대 방향으로
+  delay(1000);  // 브러시 조정 시간
 }
 
 // 청소 시작 함수
 void startCleaning() {
   int motorSpeed = (currentMode == NORMAL) ? NORMAL_SPEED : QUICK_SPEED;
   
+  // 모든 DC 모터 작동
   digitalWrite(DC_SIDE_1_IN1, HIGH);
   digitalWrite(DC_SIDE_1_IN2, LOW);
   digitalWrite(DC_SIDE_2_IN1, HIGH);
@@ -220,23 +193,23 @@ void startCleaning() {
   analogWrite(DC_SIDE_2_PWM, motorSpeed);
   analogWrite(DC_BOTTOM_PWM, motorSpeed);
   
-  Serial.println(currentMode == NORMAL ? "Normal cleaning mode started" : "Quick cleaning mode started");
+  Serial.println(currentMode == NORMAL ? "일반 모드 시작" : "쾌속 모드 시작");
 }
 
 void swingArmUp() {
+  // 스윙암 올리기
   swingArm.write(SWING_UP);
-  delay(1000);
-  Serial.println("Swing arm moved up");
-  currentState = ARM_UP;
+  delay(1000); // 1초 대기
+  currentState = WAITING;
 }
 
 void swingArmDown() {
   swingArm.write(SWING_DOWN);
-  delay(1000);
-  Serial.println("Swing arm moved down");
+  delay(1000); // 1초 대기
 }
 
 void stopCleaning() {
+  // 모든 DC 모터 정지
   digitalWrite(DC_SIDE_1_IN1, LOW);
   digitalWrite(DC_SIDE_1_IN2, LOW);
   digitalWrite(DC_SIDE_2_IN1, LOW);
@@ -245,15 +218,17 @@ void stopCleaning() {
   digitalWrite(DC_BOTTOM_IN2, LOW);
   analogWrite(DC_SIDE_1_PWM, 0);
   analogWrite(DC_SIDE_2_PWM, 0);
-  analogWrite(DC_BOTTOM_PWM, 0);
+  analogWrite(DC_BOTTOM_PWM, 0);  
   Serial.println("Motors stopped");
 }
 
 void resetPosition() {
+  // 초기 위치로 복귀
   sideBrush1.write(0);
   sideBrush2.write(0);
   swingArm.write(SWING_DOWN);
   delay(1000);
-  Serial.println("Reset to initial position");
-  currentState = IDLE;
+  currentState = WAITING;
 }
+
+
