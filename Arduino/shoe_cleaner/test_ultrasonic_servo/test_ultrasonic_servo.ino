@@ -55,42 +55,70 @@ void setup() {
 
 void loop() {
   if (Serial.available() > 0) {
-    char command = Serial.read();
-    static int currentAngle = SWING_DOWN;
+    String command = Serial.readStringUntil('\n');
     
-    // 입력된 명령어 확인 출력
-    Serial.print("Received command: ");
-    Serial.println(command);
-    
-    switch (command) {
-      case 's':  // 스윙암 올리기
-        Serial.println("Swing arm up");
-        moveServoSlowly(currentAngle, SWING_UP);
-        currentAngle = SWING_UP;
-        break;
-      case 'f':  // 스윙암 내리기 및 측정 시작
-        Serial.println("Swing arm down and measuring...");
-        moveServoSlowly(currentAngle, SWING_DOWN);
-        currentAngle = SWING_DOWN;
-        delay(500);
-        measureAndAdjust();
-        break;
-      case 'e':  // 측정 후 스윙암 올리기
-        Serial.println("Measurement complete, swing arm up");
-        moveServoSlowly(currentAngle, SWING_UP);
-        currentAngle = SWING_UP;
-        break;
-      case 'd':  // 측정 후 스윙암 내리기
-        Serial.println("Measurement complete, swing arm down");
-        moveServoSlowly(currentAngle, SWING_DOWN);
-        currentAngle = SWING_DOWN;
-        break;  
+    if (command == "SWING_UP") {
+      swingArmUp();
+      currentState = ARM_UP;
     }
-    
-    // 시리얼 버퍼 비우기
-    while(Serial.available() > 0) {
-      Serial.read();
+    else if (command == "NORMAL_MODE" && currentState == ARM_UP) {
+      currentMode = NORMAL;
+      cleaningDuration = NORMAL_CLEANING_TIME;
+      swingArmDown();
+      currentState = MEASURING;
     }
+    else if (command == "QUICK_MODE" && currentState == ARM_UP) {
+      currentMode = QUICK;
+      cleaningDuration = QUICK_CLEANING_TIME;
+      swingArmDown();
+      currentState = MEASURING;
+    }
+    else if (command == "SWING_DOWN" && currentState == FINISHING) {
+      swingArmDown();
+      currentState = IDLE;
+    }
+    else if (command == "POWER_OFF") {
+      isRunning = false;
+      stopAllMotors();
+    }
+  }
+  // 푸쉬 버튼 모드
+  // if (Serial.available() > 0) {
+  //   char command = Serial.read();
+  //   static int currentAngle = SWING_DOWN;
+    
+  //   // 입력된 명령어 확인 출력
+  //   Serial.print("Received command: ");
+  //   Serial.println(command);
+    
+  //   switch (command) {
+  //     case 's':  // 스윙암 올리기
+  //       Serial.println("Swing arm up");
+  //       moveServoSlowly(currentAngle, SWING_UP);
+  //       currentAngle = SWING_UP;
+  //       break;
+  //     case 'f':  // 스윙암 내리기 및 측정 시작
+  //       Serial.println("Swing arm down and measuring...");
+  //       moveServoSlowly(currentAngle, SWING_DOWN);
+  //       currentAngle = SWING_DOWN;
+  //       delay(500);
+  //       measureAndAdjust();
+  //       break;
+  //     case 'e':  // 측정 후 스윙암 올리기
+  //       Serial.println("Measurement complete, swing arm up");
+  //       moveServoSlowly(currentAngle, SWING_UP);
+  //       currentAngle = SWING_UP;
+  //       break;
+  //     case 'd':  // 측정 후 스윙암 내리기
+  //       Serial.println("Measurement complete, swing arm down");
+  //       moveServoSlowly(currentAngle, SWING_DOWN);
+  //       currentAngle = SWING_DOWN;
+  //       break;  
+  //   }
+    
+  // 시리얼 버퍼 비우기
+  while(Serial.available() > 0) {
+    Serial.read();
   }
 }
 
