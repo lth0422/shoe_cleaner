@@ -29,6 +29,7 @@
 
 // 상수 설정
 int pos = 0; // 서보모터 위치
+int brushAngle = 0; // 브러시 각도
 bool isRunning = true; // 모터 작동 여부
 
 const unsigned long CLEANING_TIME = 60000; // 청소 시간 1분
@@ -53,7 +54,7 @@ unsigned long cleaningDuration = NORMAL_CLEANING_TIME;  // 현재 설정된 청�
 Servo swingArm;
 Servo sideBrush1;
 Servo sideBrush2;
-NewPing sonar(TRIG_PIN, ECHO_PIN, 200); // 최대 200cm
+NewPing sonar(TRIG_PIN, ECHO_PIN, 400); // 최대 400cm
 
 // 상태 변수
 enum CleaningState {
@@ -103,8 +104,8 @@ void setup() {
   
   
   // 측면 브러시들 중립 위치로
-  sideBrush1.write(90);
-  sideBrush2.write(90);
+  sideBrush1.write(0);
+  sideBrush2.write(0);
   
   Serial.println("Initialization complete!");
 }
@@ -150,6 +151,7 @@ void loop() {
             currentAngle = SWING_DOWN;
             delay(500);  // 안정화를 위한 대기
             measureAndAdjust();  // 측정 및 브러시 조정
+            delay(1000); // 측정 후 안정화 대기
             startCleaning();     // 청소 시작
             cleaningStartTime = millis();
             currentState = CLEANING;  // 바로 CLEANING 상태로 전환
@@ -162,6 +164,7 @@ void loop() {
             currentAngle = SWING_DOWN;
             delay(500);  // 안정화를 위한 대기
             measureAndAdjust();  // 측정 및 브러시 조정
+            delay(1000);
             startCleaning();     // 청소 시작
             cleaningStartTime = millis();
             currentState = CLEANING;  // 바로 CLEANING 상태로 전환
@@ -173,6 +176,11 @@ void loop() {
         if (millis() - cleaningStartTime >= cleaningDuration) {
           Serial.println("Cleaning complete, transitioning to finishing state");
           //resetPosition();
+          for (int pos = brushAngle; pos > 0; pos -= 1) {
+            sideBrush1.write(pos);
+            sideBrush2.write(pos+10);
+            delay(30);
+          }
           moveServoSlowly(currentAngle, SWING_UP);
           currentAngle = SWING_UP;
           currentState = FINISHING;
@@ -235,21 +243,27 @@ void measureAndAdjust() {
 
 // 브러시 조정 함수
 void adjustBrushes(int distance) {
-  int brushAngle;
+  //int brushAngle;
   if (distance < 3) {
-    brushAngle = 30;
+    brushAngle = 50;
   } else if (distance < 6) {
-    brushAngle = 60;
+    brushAngle = 110;
   } else {
-    brushAngle = 90;
+    brushAngle = 170;
   }
   
-  sideBrush1.write(brushAngle);
-  sideBrush2.write(brushAngle);
+  sideBrush1.attach(SERVO_BRUSH_1);
+  sideBrush2.attach(SERVO_BRUSH_2);
+  for (int pos = 0; pos <= brushAngle; pos += 1) {
+    sideBrush1.write(pos);
+    sideBrush2.write(pos+10);
+    delay(30);
+  }
+  
   Serial.print("Brushes adjusted to angle: ");
   
   Serial.println(brushAngle);
-  delay(1000);
+  //delay(1000);
 
   // 필요한 경우 서보모터 분리
   // sideBrush1.detach();
@@ -335,10 +349,15 @@ void stopCleaning() {
 void resetPosition() {
   sideBrush1.attach(SERVO_BRUSH_1);
   sideBrush2.attach(SERVO_BRUSH_2);
-  sideBrush1.write(0);
-  sideBrush2.write(0);
+  // for (int pos = brushAngle; pos > 0; pos -= 1) {
+  //   sideBrush1.write(pos);
+  //   sideBrush2.write(pos+10);
+  //   delay(30);
+  // }
+  // sideBrush1.write(0);
+  // sideBrush2.write(0);
   swingArm.write(SWING_DOWN);
-  delay(1000);
+  //delay(1000);
   Serial.println("Reset to initial position");
   currentState = IDLE;
 }

@@ -7,6 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -14,7 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -31,6 +37,7 @@ import java.util.*
 import com.example.shoecleaner.ui.theme.ShoeCleanerTheme
 import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 
 class MainActivity : ComponentActivity() {
     private var bluetoothGatt: BluetoothGatt? = null
@@ -60,7 +67,7 @@ class MainActivity : ComponentActivity() {
             ShoeCleanerTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = Color.White
                 ) {
                     ShoeCleanerControl(
                         isConnected = isConnected,
@@ -201,15 +208,67 @@ fun ShoeCleanerControl(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .background(Color.White),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceEvenly
     ) {
-        Text(text = if (isConnected) "연결됨" else "연결 안됨", color = if (isConnected) Color.Green else Color.Red)
-        Button(onClick = { onButtonClick("SWING_UP") }) { Text("스윙암 올리기") }
-        Button(onClick = { onButtonClick("NORMAL_MODE") }) { Text("일반 모드") }
-        Button(onClick = { onButtonClick("QUICK_MODE") }) { Text("쾌속 모드") }
-        Button(onClick = { onButtonClick("SWING_DOWN") }) { Text("스윙암 내리기") }
-        Button(onClick = { onButtonClick("POWER_OFF") }) { Text("전원 OFF") }
+        Text(
+            text = if (isConnected) "연결됨" else "연결 안됨",
+            color = if (isConnected) Color.Green else Color.Red,
+            style = MaterialTheme.typography.headlineSmall
+
+        )
+        Button(
+            onClick = { onButtonClick("SWING_UP") },
+            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
+            shape = CircleShape
+        ) {
+            Text("스윙암 올리기")
+        }
+        Button(
+            onClick = { onButtonClick("NORMAL_MODE") },
+            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
+            shape = CircleShape
+        ) {
+            Text("일반 모드")
+        }
+        Button(
+            onClick = { onButtonClick("QUICK_MODE") },
+            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
+            shape = CircleShape
+        ) {
+            Text("쾌속 모드")
+        }
+        Button(
+            onClick = { onButtonClick("SWING_DOWN") },
+            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
+            shape = CircleShape
+        ) {
+            Text("스윙암 내리기")
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(
+                onClick = { onButtonClick("POWER_OFF") },
+                modifier = Modifier
+                    .size(60.dp)
+                    .background(Color.Red, CircleShape)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.poweroff),
+                    contentDescription = "전원 OFF",
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+            
+            Text(
+                text = "전원 OFF",
+                fontSize = 16.sp,
+                color = Color.Black
+            )
+        }
     }
 }
