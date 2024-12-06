@@ -22,9 +22,13 @@
 #define TRIG_PIN 26  // 초음파 센서 TRIG 핀 번호 
 #define ECHO_PIN 27  // 초음파 센서 ECHO 핀 번호 
 
-#define SWING_UP 170    
-#define SWING_DOWN 10  
+#define SWING_UP 100    
+#define SWING_DOWN 30  
 #define SERVO_SPEED 30  // 각도 변화 속도 (값이 작을수록 더 천천히 움직임)
+#define SIDE_SERVO_SPEED 50
+
+#define MAX_ANGLE 160
+#define MIN_ANGLE 70
 
 
 // 상수 설정
@@ -36,8 +40,8 @@ const unsigned long CLEANING_TIME = 60000; // 청소 시간 1분
 //const int SWING_UP = 0;    // 스윙암 올림 각도
 //const int SWING_DOWN = 90; // 스윙암 내림 각도
 
-const unsigned long NORMAL_CLEANING_TIME = 10000; // 일반 모드 10s
-const unsigned long QUICK_CLEANING_TIME = 5000;   // 쾌속 모드 5s
+const unsigned long NORMAL_CLEANING_TIME = 20000; // 일반 모드 20s
+const unsigned long QUICK_CLEANING_TIME = 10000;   // 쾌속 모드 10s
 const int NORMAL_SPEED = 180;  // 일반 모드 속도
 const int QUICK_SPEED = 255;   // 쾌속 모드 속도
 
@@ -89,6 +93,10 @@ void setup() {
   
   delay(1000);  // 안정화를 위한 대기
 
+  // 측면 브러시들 중립 위치로
+  // sideBrush1.write(20);
+  // sideBrush2.write(160);
+
   swingArm.attach(SERVO_SWING);
   sideBrush1.attach(SERVO_BRUSH_1);
   sideBrush2.attach(SERVO_BRUSH_2);
@@ -102,10 +110,6 @@ void setup() {
   swingArm.write(SWING_DOWN);  // 바로 아래 위치로 이동
   delay(1000);  // 안정화 대기
   
-  
-  // 측면 브러시들 중립 위치로
-  sideBrush1.write(0);
-  sideBrush2.write(0);
   
   Serial.println("Initialization complete!");
 }
@@ -175,11 +179,15 @@ void loop() {
         case CLEANING:
         if (millis() - cleaningStartTime >= cleaningDuration) {
           Serial.println("Cleaning complete, transitioning to finishing state");
+
+          analogWrite(DC_SIDE_1_PWM, 0);
+          analogWrite(DC_SIDE_2_PWM, 0);
+          analogWrite(DC_BOTTOM_PWM, 0);
           //resetPosition();
-          for (int pos = brushAngle; pos > 0; pos -= 1) {
-            sideBrush1.write(pos);
-            sideBrush2.write(pos+10);
-            delay(30);
+          for (int pos = MAX_ANGLE; pos > MIN_ANGLE; pos -= 1) {
+            sideBrush1.write(pos+20);
+            sideBrush2.write(180-pos);
+            delay(SIDE_SERVO_SPEED);
           }
           moveServoSlowly(currentAngle, SWING_UP);
           currentAngle = SWING_UP;
@@ -244,20 +252,24 @@ void measureAndAdjust() {
 // 브러시 조정 함수
 void adjustBrushes(int distance) {
   //int brushAngle;
-  if (distance < 3) {
-    brushAngle = 50;
-  } else if (distance < 6) {
-    brushAngle = 110;
-  } else {
-    brushAngle = 170;
-  }
+  // if (distance < 3) {
+  //   brushAngle = 50;
+  // } else if (distance < 6) {
+  //   brushAngle = 110;
+  // } else {
+  //   brushAngle = 170;
+  // }
   
-  sideBrush1.attach(SERVO_BRUSH_1);
-  sideBrush2.attach(SERVO_BRUSH_2);
-  for (int pos = 0; pos <= brushAngle; pos += 1) {
-    sideBrush1.write(pos);
-    sideBrush2.write(pos+10);
-    delay(30);
+  // 측면 브러시들 중립 위치로
+  // sideBrush1.write(20);
+  // sideBrush2.write(160);
+
+  // sideBrush1.attach(SERVO_BRUSH_1);
+  // sideBrush2.attach(SERVO_BRUSH_2);
+  for (int pos = MIN_ANGLE; pos <= MAX_ANGLE; pos += 1) {
+    sideBrush1.write(pos+20);
+    sideBrush2.write(180-pos);
+    delay(SIDE_SERVO_SPEED);
   }
   
   Serial.print("Brushes adjusted to angle: ");
@@ -274,16 +286,16 @@ void adjustBrushes(int distance) {
 void startCleaning() {
   int motorSpeed = (currentMode == NORMAL) ? NORMAL_SPEED : QUICK_SPEED;
   
-  // digitalWrite(DC_SIDE_1_IN1, HIGH);
-  // digitalWrite(DC_SIDE_1_IN2, LOW);
-  // digitalWrite(DC_SIDE_2_IN1, HIGH);
-  // digitalWrite(DC_SIDE_2_IN2, LOW);
-  // digitalWrite(DC_BOTTOM_IN1, HIGH);
-  // digitalWrite(DC_BOTTOM_IN2, LOW);
+  digitalWrite(DC_SIDE_1_IN1, HIGH);
+  digitalWrite(DC_SIDE_1_IN2, LOW);
+  digitalWrite(DC_SIDE_2_IN1, HIGH);
+  digitalWrite(DC_SIDE_2_IN2, LOW);
+  digitalWrite(DC_BOTTOM_IN1, HIGH);
+  digitalWrite(DC_BOTTOM_IN2, LOW);
   
-  // analogWrite(DC_SIDE_1_PWM, motorSpeed);
-  // analogWrite(DC_SIDE_2_PWM, motorSpeed);
-  // analogWrite(DC_BOTTOM_PWM, motorSpeed);
+  analogWrite(DC_SIDE_1_PWM, motorSpeed);
+  analogWrite(DC_SIDE_2_PWM, motorSpeed);
+  analogWrite(DC_BOTTOM_PWM, motorSpeed);
   
   Serial.println(currentMode == NORMAL ? "Normal cleaning mode started" : "Quick cleaning mode started");
 }
