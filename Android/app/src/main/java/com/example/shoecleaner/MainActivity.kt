@@ -26,7 +26,9 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
@@ -38,11 +40,14 @@ import com.example.shoecleaner.ui.theme.ShoeCleanerTheme
 import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import android.util.Log
 
 class MainActivity : ComponentActivity() {
     private var bluetoothGatt: BluetoothGatt? = null
     private val UART_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
     private val CONTROL_CHARACTERISTIC_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+    private val COMPLETE_CHARACTERISTIC_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
+    private var currentState by mutableStateOf(DeviceState.INITIAL)
 
     private val BLUETOOTH_PERMISSIONS = arrayOf(
         android.Manifest.permission.BLUETOOTH_SCAN,
@@ -61,6 +66,15 @@ class MainActivity : ComponentActivity() {
 
     private var isConnected by mutableStateOf(false)
 
+    enum class DeviceState {
+        INITIAL,        // 초기 상태 (스윙암 올리기만 가능)
+        ARM_MOVING_UP,  // 스윙암 올라가는 중 (모든 버튼 비활성화)
+        ARM_UP,         // 스윙암 올라감 (일반/쾌속 모드만 가능)
+        CLEANING,       // 청소 중 (모든 버튼 비활성화)
+        CLEANING_DONE,  // 청소 완료 (스윙암 내리기만 가능)
+        ARM_MOVING_DOWN // 스윙암 내려가는 중 (모든 버튼 비활성화)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -71,6 +85,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     ShoeCleanerControl(
                         isConnected = isConnected,
+                        currentState = currentState,
                         onButtonClick = { command -> sendBluetoothCommand(command) }
                     )
                 }
@@ -164,11 +179,80 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
                 override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
                     if (status == BluetoothGatt.GATT_SUCCESS) {
+                        Log.d("BluetoothDebug", "서비스 발견됨")
                         val service = gatt.getService(UART_SERVICE_UUID)
-                        val characteristic = service?.getCharacteristic(CONTROL_CHARACTERISTIC_UUID)
-                        characteristic?.let { gatt.readCharacteristic(it) }
+                        if (service != null) {
+                            Log.d("BluetoothDebug", "UART 서비스 찾음")
+                            val completeCharacteristic = service.getCharacteristic(COMPLETE_CHARACTERISTIC_UUID)
+                            if (completeCharacteristic != null) {
+                                Log.d("BluetoothDebug", "Complete Characteristic 찾음")
+                                
+                                // Notification 활성화
+                                gatt.setCharacteristicNotification(completeCharacteristic, true)
+                                
+                                // Descriptor 설정
+                                val descriptor = completeCharacteristic.getDescriptor(
+                                    UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")  // Client Characteristic Configuration Descriptor
+                                )
+                                if (descriptor != null) {
+                                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                                    gatt.writeDescriptor(descriptor)
+                                    Log.d("BluetoothDebug", "Notification Descriptor 설정됨")
+                                } else {
+                                    Log.e("BluetoothDebug", "Descriptor를 찾을 수 없음")
+                                }
+                                
+                                Log.d("BluetoothDebug", "Complete Characteristic 알림 활성화")
+                            } else {
+                                Log.e("BluetoothDebug", "Complete Characteristic을 찾을 수 없음")
+                            }
+                        } else {
+                            Log.e("BluetoothDebug", "UART 서비스를 찾을 수 없음")
+                        }
+                    } else {
+                        Log.e("BluetoothDebug", "서비스 발견 실패: $status")
+                    }
+                }
+
+                override fun onCharacteristicChanged(
+                    gatt: BluetoothGatt,
+                    characteristic: BluetoothGattCharacteristic,
+                    value: ByteArray
+                ) {
+                    Log.d("BluetoothDebug", "특성 변경 감지됨: ${characteristic.uuid}")
+                    Log.d("BluetoothDebug", "데이터 길이: ${value.size}")
+                    Log.d("BluetoothDebug", "데이터 내용: ${value.joinToString(", ") { it.toInt().toString() }}")
+                    
+                    if (characteristic.uuid == COMPLETE_CHARACTERISTIC_UUID) {
+                        val receivedValue = value[0].toInt()
+                        Log.d("BluetoothDebug", "받은 특성 값: $receivedValue")
+                        
+                        when (receivedValue) {
+                            1 -> {
+                                Log.d("BluetoothDebug", "SWING_UP_COMPLETE 수신")
+                                runOnUiThread {
+                                    currentState = DeviceState.ARM_UP
+                                    Toast.makeText(this@MainActivity, "스윙암이 올라갔습니다", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            2 -> {
+                                Log.d("BluetoothDebug", "SWING_DOWN_COMPLETE 수신")
+                                runOnUiThread {
+                                    currentState = DeviceState.INITIAL
+                                    Toast.makeText(this@MainActivity, "스윙암이 내려갔습니다", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            3 -> {
+                                Log.d("BluetoothDebug", "CLEANING_END 수신")
+                                runOnUiThread {
+                                    currentState = DeviceState.CLEANING_DONE
+                                    Toast.makeText(this@MainActivity, "청소가 완료되었습니다", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
                     }
                 }
             })
@@ -203,6 +287,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ShoeCleanerControl(
     isConnected: Boolean,
+    currentState: MainActivity.DeviceState,
     onButtonClick: (String) -> Unit
 ) {
     Column(
@@ -217,42 +302,51 @@ fun ShoeCleanerControl(
             text = if (isConnected) "연결됨" else "연결 안됨",
             color = if (isConnected) Color.Green else Color.Red,
             style = MaterialTheme.typography.headlineSmall
-
         )
+        
         Button(
             onClick = { onButtonClick("SWING_UP") },
+            enabled = isConnected && currentState == MainActivity.DeviceState.INITIAL,
             colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
             shape = CircleShape
         ) {
             Text("스윙암 올리기")
         }
+        
         Button(
             onClick = { onButtonClick("NORMAL_MODE") },
+            enabled = isConnected && currentState == MainActivity.DeviceState.ARM_UP,
             colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
             shape = CircleShape
         ) {
             Text("일반 모드")
         }
+        
         Button(
             onClick = { onButtonClick("QUICK_MODE") },
+            enabled = isConnected && currentState == MainActivity.DeviceState.ARM_UP,
             colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
             shape = CircleShape
         ) {
             Text("쾌속 모드")
         }
+        
         Button(
             onClick = { onButtonClick("SWING_DOWN") },
+            enabled = isConnected && currentState == MainActivity.DeviceState.CLEANING_DONE,
             colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
             shape = CircleShape
         ) {
             Text("스윙암 내리기")
         }
+        
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             IconButton(
                 onClick = { onButtonClick("POWER_OFF") },
+                enabled = isConnected,
                 modifier = Modifier
                     .size(60.dp)
                     .background(Color.Red, CircleShape)

@@ -141,6 +141,7 @@ void loop() {
             Serial.println("Swing arm up command received");
             moveServoSlowly(currentAngle, SWING_UP);
             currentAngle = SWING_UP;  // 현재 각도 업데이트
+            Serial.println("SWING_UP_COMPLETE");
             //swingArmUp();
             currentState = ARM_UP;
           }
@@ -191,6 +192,7 @@ void loop() {
           }
           moveServoSlowly(currentAngle, SWING_UP);
           currentAngle = SWING_UP;
+          Serial.println("CLEANING_END");
           currentState = FINISHING;
           //swingArmUp();
         }
@@ -202,6 +204,8 @@ void loop() {
             swingArm.attach(SERVO_SWING);
             moveServoSlowly(currentAngle, SWING_DOWN);
             currentAngle = SWING_DOWN;  // 현재 각도 업데이트
+            Serial.println("SWING_DOWN_COMPLETE");
+
             currentState = IDLE;
             delay(200);
           }
@@ -326,14 +330,14 @@ void moveServoSlowly(int startAngle, int endAngle) {
       swingArm.write(angle);
       delay(SERVO_SPEED);
     }
-    Serial.println("Swing arm moved up");
+    // Serial.println("SWING_UP_COMPLETE");
   } else {
     // 각도 감소
     for(int angle = startAngle; angle >= endAngle; angle -= 1) {
       swingArm.write(angle);
       delay(SERVO_SPEED);
     }
-    Serial.println("Swing arm moved down");
+    // Serial.println("SWING_DOWN_COMPLETE");
   }
   
   //swingArm.detach();
@@ -356,6 +360,7 @@ void stopCleaning() {
   sideBrush1.detach();
   sideBrush2.detach();
   Serial.println("Motors stopped");
+  // Serial.println("CLEANING_END");
 }
 
 void resetPosition() {

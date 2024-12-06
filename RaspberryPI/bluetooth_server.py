@@ -12,8 +12,10 @@ LE_ADVERTISING_MANAGER_IFACE = 'org.bluez.LEAdvertisingManager1'
 GATT_MANAGER_IFACE = 'org.bluez.GattManager1'
 UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
 CONTROL_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'
+COMPLETE_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'
 LOCAL_NAME = 'shoecleaner'
 mainloop = None
+GATT_CHRC_IFACE = 'org.bluez.GattCharacteristic1'
 
 class MainControlCharacteristic(Characteristic):
     def __init__(self, bus, index, service, arduino):
@@ -38,11 +40,64 @@ class MainControlCharacteristic(Characteristic):
         print(f'아두이노로 전송: {command}')
         print("=====================================")
 
+class CompleteCharacteristic(Characteristic):
+    def __init__(self, bus, index, service):
+        Characteristic.__init__(self, bus, index, COMPLETE_CHARACTERISTIC_UUID,
+                              ['notify'], service)
+        self.notifying = True
+        print("Complete Characteristic 초기화 완료 (알림 활성화)")
+
+    def StartNotify(self):
+        if self.notifying:
+            print("알림이 이미 활성화되어 있습니다")
+            return
+        self.notifying = True
+        print("알림이 활성화되었습니다")
+
+    def StopNotify(self):
+        if not self.notifying:
+            print("알림이 이미 비활성화되어 있습니다")
+            return
+        self.notifying = False
+        print("알림이 비활성화되었습니다")
+
+    def SendComplete(self, status):
+        if not self.notifying:
+            print("알림이 비활성화 상태입니다")
+            return
+        value = []
+        if status == "SWING_UP_COMPLETE":
+            value.append(dbus.Byte(1))
+            print("안드로이드로 전송: SWING_UP_COMPLETE (1)")
+        elif status == "SWING_DOWN_COMPLETE":
+            value.append(dbus.Byte(2))
+            print("안드로이드로 전송: SWING_DOWN_COMPLETE (2)")
+        elif status == "CLEANING_END":
+            value.append(dbus.Byte(3))
+            print("안드로이드로 전송: CLEANING_END (3)")
+        self.PropertiesChanged(GATT_CHRC_IFACE, {'Value': value}, [])
+
 class UartService(Service):
     def __init__(self, bus, index, arduino):
         Service.__init__(self, bus, index, UART_SERVICE_UUID, True)
         self.control_characteristic = MainControlCharacteristic(bus, 0, self, arduino)
+        self.complete_characteristic = CompleteCharacteristic(bus, 1, self)
         self.add_characteristic(self.control_characteristic)
+        self.add_characteristic(self.complete_characteristic)
+        
+        # 아두이노로부터 상태 읽기 스레드 시작
+        self.arduino = arduino
+        threading.Thread(target=self.read_arduino_status, daemon=True).start()
+
+    def read_arduino_status(self):
+        while True:
+            if self.arduino.in_waiting:
+                status = self.arduino.readline().decode().strip()
+                print(f"아두이노로부터 수신: {status}")
+                if status in ["SWING_UP_COMPLETE", "SWING_DOWN_COMPLETE", "CLEANING_END"]:
+                    print(f"상태 변경 감지: {status}")
+                    self.complete_characteristic.SendComplete(status)
+            time.sleep(0.1)
 
 class UartApplication(dbus.service.Object):
     def __init__(self, bus, arduino):
