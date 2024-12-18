@@ -293,63 +293,90 @@ fun ShoeCleanerControl(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(24.dp)
             .background(Color.White),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceEvenly
     ) {
-        Text(
-            text = if (isConnected) "연결됨" else "연결 안됨",
-            color = if (isConnected) Color.Green else Color.Red,
-            style = MaterialTheme.typography.headlineSmall
-        )
-        
-        Button(
-            onClick = { onButtonClick("SWING_UP") },
-            enabled = isConnected && currentState == MainActivity.DeviceState.INITIAL,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
-            shape = CircleShape
+        // 연결 상태 표시
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text("스윙암 올리기")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(if (isConnected) Color.Green else Color.Red, CircleShape)
+                )
+                Text(
+                    text = if (isConnected) "연결됨" else "연결 안됨",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
         }
-        
-        Button(
-            onClick = { onButtonClick("NORMAL_MODE") },
-            enabled = isConnected && currentState == MainActivity.DeviceState.ARM_UP,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
-            shape = CircleShape
-        ) {
-            Text("일반 모드")
-        }
-        
-        Button(
-            onClick = { onButtonClick("QUICK_MODE") },
-            enabled = isConnected && currentState == MainActivity.DeviceState.ARM_UP,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
-            shape = CircleShape
-        ) {
-            Text("쾌속 모드")
-        }
-        
-        Button(
-            onClick = { onButtonClick("SWING_DOWN") },
-            enabled = isConnected && currentState == MainActivity.DeviceState.CLEANING_DONE,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
-            shape = CircleShape
-        ) {
-            Text("스윙암 내리기")
-        }
-        
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 메인 컨트롤 버튼들
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(30.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            CustomControlButton(
+                text = "스윙암 올리기",
+                icon = R.drawable.swing_up,
+                enabled = isConnected && currentState == MainActivity.DeviceState.INITIAL,
+                onClick = { onButtonClick("SWING_UP") }
+            )
+
+            CustomControlButton(
+                text = "일반 모드",
+                icon = R.drawable.normal_mode,
+                enabled = isConnected && currentState == MainActivity.DeviceState.ARM_UP,
+                onClick = { onButtonClick("NORMAL_MODE") }
+            )
+
+            CustomControlButton(
+                text = "쾌속 모드",
+                icon = R.drawable.speed_mode,
+                enabled = isConnected && currentState == MainActivity.DeviceState.ARM_UP,
+                onClick = { onButtonClick("QUICK_MODE") }
+            )
+
+            CustomControlButton(
+                text = "스윙암 내리기",
+                icon = R.drawable.swing_down,
+                enabled = isConnected && currentState == MainActivity.DeviceState.CLEANING_DONE,
+                onClick = { onButtonClick("SWING_DOWN") }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // 전원 버튼
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(bottom = 60.dp)
         ) {
             IconButton(
                 onClick = { onButtonClick("POWER_OFF") },
                 enabled = isConnected,
                 modifier = Modifier
-                    .size(60.dp)
-                    .background(Color.Red, CircleShape)
+                    .size(80.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0xFFFF5252), Color(0xFFFF1744))
+                        ),
+                        shape = CircleShape
+                    )
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.poweroff),
@@ -357,11 +384,49 @@ fun ShoeCleanerControl(
                     modifier = Modifier.size(40.dp)
                 )
             }
-            
             Text(
                 text = "전원 OFF",
-                fontSize = 16.sp,
-                color = Color.Black
+                style = MaterialTheme.typography.titleMedium,
+                color = Color(0xFFFF1744)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CustomControlButton(
+    text: String,
+    icon: Int,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(70.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (enabled) Color(0xFF2196F3) else Color(0xFF757575),
+            contentColor = Color.White,
+            disabledContainerColor = Color(0xFF757575),
+            disabledContentColor = Color.White
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Image(
+                painter = painterResource(id = icon),
+                contentDescription = null,
+                modifier = Modifier.size(32.dp)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleMedium,
+                fontSize = 18.sp
             )
         }
     }
